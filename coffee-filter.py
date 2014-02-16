@@ -45,26 +45,18 @@ def predict_correct(f,t,dt,x):
     return times, array(pc_state)
 #/~ ODE Solvers
 
-#-> Not quite sure this is 100% correct...
 def finite_diff(times,x):
-    # Okay... We're going to look at:
-    ##
-    ## y(t + dt) + y(t - dt)
-    ## x[0] and x[1]
-    ## / (2.*dt)
-    v_fd = lambda dt,x: (x[0] + x[1])/(2.*dt)
+    v_fd = lambda dt,x: (x[0] - x[1])/(2.*dt)
     a_fd = lambda dt,x: (x[0] - 2*x[1] + x[2])/(dt**2)
 
-    v = []
-    a = []
+    v = []; a = []; dts = []
     for i in range(1, len(times)-1):
-        dt = (times[i+1] - times[i-1]) /2.
-        v.append(v_fd(dt,[x[i+1], x[i-1]]))
-        a.append(a_fd(dt,[x[i+1], x[i], x[i-1]]))
+        dts.append((times[i+1] - times[i-1]) /2.)
+        v.append(v_fd(dts[i-1],[x[i+1], x[i-1]]))
+        a.append(a_fd(dts[i-1],[x[i+1], x[i], x[i-1]]))
 
-    v = array(v)
-    a = array(a)
-    return v, a
+    v = array(v); a = array(a); dts = array(dts)
+    return v, a, dts
 
 def sample_data(data=None):
     """ Calculates thermal constants from a dataset.
@@ -82,9 +74,9 @@ def sample_data(data=None):
 
     times = data[0,:]; print times
     pos = data[1,:]; print pos
-    vel, acc  = finite_diff(times,pos); print vel; print acc
+    vel, acc, dts = finite_diff(times,pos); print vel; print acc
     
-    return times, pos, vel, acc
+    return times, dts, pos, vel, acc
 
 def plot_samples(times, pos, vel, acc):
     fig, axes = subplots(2, 2)
@@ -94,7 +86,7 @@ def plot_samples(times, pos, vel, acc):
     end_ptmark, = axes[0,0].plot(times[-1], pos[-1], 'ro', ms=10)
     
     axes[0,0].legend(  [ptmark, start_ptmark, end_ptmark],
-                [r'$\left(p,t\right)$', r'First', r'Last'],
+                [r'$\left(t,p\right)$', r'First', r'Last'],
                 numpoints=1,
                 loc="upper right")
 
@@ -109,7 +101,7 @@ def plot_samples(times, pos, vel, acc):
     end_vtmark, = axes[1,0].plot(times[-2], vel[-1], 'ro', ms=10)
 
     axes[1,0].legend(  [vtmark, start_vtmark, end_vtmark],
-                [r'$\left(v,t\right)$', r'First', r'Last'],
+                [r'$\left(t,v\right)$', r'First', r'Last'],
                 numpoints=1,
                 loc="upper right")
     
@@ -124,7 +116,7 @@ def plot_samples(times, pos, vel, acc):
     end_atmark, = axes[0,1].plot(times[-2], acc[-1], 'ro', ms=10)
 
     axes[0,1].legend(  [atmark, start_atmark, end_atmark],
-                [r'$\left(a,t\right)$', r'First', r'Last'],
+                [r'$\left(t,a\right)$', r'First', r'Last'],
                 numpoints=1,
                 loc="lower right")
     
@@ -154,46 +146,103 @@ def plot_samples(times, pos, vel, acc):
 
     show()
 
-#~ Global Variables
-t0 = 0; tf = 10*pi; dt = .1
-times = np.arange(t0, tf, dt)
+def plot_acc_vs_vel(vel,acc):
+    fig, ax = plt.subplots()
 
-g = 9.81
-x0 = 1.; v0 = 0.; a0 = g
-state = [np.array([x0,v0,a0])]
-#/~ Global Variables
+    avmark, = ax.plot(vel, acc, 'b--o')
+    start_avmark, = ax.plot(vel[0], acc[0], 'go', ms=10)
+    end_avmark, = ax.plot(vel[-1], acc[-1], 'ro', ms=10)
 
-#~ Entry point of the script.
-if __name__ == "__main__":
-<<<<<<< HEAD
-    sample_data()
+    ax.legend(  [avmark, start_avmark, end_avmark],
+                [r'$\left(v,a\right)$', r'First', r'Last'],
+                numpoints=1,
+                loc="lower right")
     
+    configure(  ax=ax,
+                title="Acceleration vs Velocity",
+                xlabel=r"Velocity $\left(\frac{meters}{second}\right)$",
+                ylabel=r"Acceleration $\left(\frac{meters}{seconds^2}\right)$",
+                xbounds=None, ybounds=(-10,10))
+
+    fig.suptitle("Falling Coffee Filter", size=30)
+    fig.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.08)
+
+    show()
+
+def plot_samples_and_models(times, pos, vel, acc):
+    F1 = [array([pos[0], vel[0]])]
+    F2 = [array([pos[0], vel[0]])]
+    for t,dt,p,v in zip(times,dts,pos,vel)[1:]:
+        F1.append(rk4(falld1, t, dt, F1[-1]))
+        F2.append(rk4(falld2, t, dt, F2[-1]))
+
+    F1 = array(F1)
+    F2 = array(F2)
+
+    fig, axes = subplots(2)
+
+    pmark, = axes[0].plot(times, pos, 'b--o')
+    plmark, = axes[0].plot(times[:-2], F1[:,0], 'g--o')
+    pqmark, = axes[0].plot(times[:-2], F2[:,0], 'r--o')
+
+    axes[0].legend(  [pmark, plmark, pqmark],
+                [r'$\left(t,p\right)$', r'Linear', r'Quadratic'],
+                numpoints=1,
+                loc="upper right")
+    
+    configure(  ax=axes[0],
+                title=r'Position vs Time $\left(v_t='+ str(vT)+ r'\right)$',
+                xlabel=r"Time $\left(seconds\right)$",
+                ylabel=r"Position $\left(meters\right)$",
+                xbounds=None, ybounds=(0,.5))
+
+    vmark, = axes[1].plot(times[:-2], vel, 'b--o')
+    vlmark, = axes[1].plot(times[:-2], F1[:,1], 'g--o')
+    vqmark, = axes[1].plot(times[:-2], F2[:,1], 'r--o')
+
+    axes[1].legend(  [vmark, vlmark, vqmark],
+                [r'$\left(t,v\right)$', r'Linear', r'Quadratic'],
+                numpoints=1,
+                loc="upper right")
+    
+    configure(  ax=axes[1],
+                title=r'Velocity vs Time $\left(v_t='+str(vT)+r'\right)$',
+                xlabel=r"Time $\left(seconds\right)$",
+                ylabel=r"Velocity $\left(\frac{meters}{second}\right)$",
+                xbounds=None, ybounds=None)
+
+    fig.suptitle("Falling Coffee Filter", size=30)
+    fig.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.08)
+
+    show()
+
 #sliding average for smoothing
 def slide_avg(x):
     avg = []
     for i in range(len(x)-2):
         avg.append((x[i]+x[i+1]+x[i+2])/3)
     return np.array(avg)
-position_avg = slide_avg(position)
-#can change the last line to velocity and then acc
-#This is what I have been working on so far
-t = time    
-x = position
-for i in range(1,len(x)-1):
-    dt = ((t[i+1] + t[i-1])/2)
-    v.append((x[i+1] - x[i-1])/(2*(dt)))
-    a.append((x[i+1] - 2*(x[i]) + x[i-1])/(dt**2))
-
-vT = -0.025
 
 def falld1(t,x):
-    return np.array([x[1],g(1-(x[1]/vT))])
+    return np.array([x[1],g*(1-(x[1]/vT))])
 
 def falld2(t,x):
-    return np.array([x[1],g(1-(x[1]/vT)**2)])
+    return np.array([x[1],g*(1-(x[1]/vT)**2)])
 # this is when I was going to run rk with the two falling models
 
-=======
-    times, pos, vel, acc = sample_data()
+#~ Entry point of the script.
+if __name__ == "__main__":
+    #~ State Variables
+    t0 = 0; tf = 10*pi; dt = .1
+    times = np.arange(t0, tf, dt)
+
+    g = -9.81
+    x0 = 1.; v0 = 0.; vT = -0.425; a0 = g
+    state = [np.array([x0,v0,a0])]
+    #/~ State Variables
+
+    times, dts, pos, vel, acc = sample_data()
+    
     plot_samples(times, pos, vel, acc)
->>>>>>> Plots and Finite Difference
+    plot_acc_vs_vel(vel,acc)
+    plot_samples_and_models(times, pos, vel, acc)
